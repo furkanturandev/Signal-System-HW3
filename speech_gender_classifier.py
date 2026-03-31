@@ -75,12 +75,9 @@ WOMAN_UPPER = 255
 def load_master_metadata(dataset_root):
     """
     Combine all group Excel files to create a master list.
-    glob("Dataset/**/Grup_*.xlsx") -> pd.concat
+    Normalizes column names to handle variations across groups.
     """
-    # Scan for group Excel files: Grup_01.xlsx, Grup_02.xlsx, ...
     excel_files = glob.glob(os.path.join(dataset_root, "**", "Grup_*.xlsx"), recursive=True)
-
-    # Fallback: try Group_*.xlsx or any .xlsx
     if not excel_files:
         excel_files = glob.glob(os.path.join(dataset_root, "**", "Group_*.xlsx"), recursive=True)
     if not excel_files:
@@ -89,11 +86,32 @@ def load_master_metadata(dataset_root):
     if not excel_files:
         return pd.DataFrame()
 
-    # Combine all excel files into a single master DataFrame
     all_dfs = []
     for f in excel_files:
         try:
             df = pd.read_excel(f)
+
+            # Strip whitespace from column names
+            df.columns = [str(c).strip() for c in df.columns]
+
+            # Normalize column names to a standard format
+            col_map = {}
+            for c in df.columns:
+                cl = c.lower().replace(" ", "_")
+                if cl in ["file_name", "file_path", "filename", "dosya_adi", "dosya_adı"]:
+                    col_map[c] = "File_Name"
+                elif cl in ["gender", "cinsiyet"]:
+                    col_map[c] = "Gender"
+                elif cl in ["age", "yas", "yaş"]:
+                    col_map[c] = "Age"
+                elif cl in ["subject_id", "denek_id"]:
+                    col_map[c] = "Subject_ID"
+                elif cl in ["feeling", "duygu"]:
+                    col_map[c] = "Feeling"
+                elif cl in ["sentence_no", "cumle_no", "cümle_no"]:
+                    col_map[c] = "Sentence_No"
+
+            df = df.rename(columns=col_map)
             df["_source_folder"] = os.path.dirname(f)
             all_dfs.append(df)
         except Exception:
@@ -108,57 +126,60 @@ def load_master_metadata(dataset_root):
 
 def resolve_audio_path(row, dataset_root):
     """
-    Find the actual .wav file from the File_Path column.
-    Uses os.path.exists() as recommended in the project tips.
+    Find the actual .wav file. Column is normalized to 'File_Name'.
     """
-    if "File_Path" not in row.index or pd.isna(row["File_Path"]):
+    if "File_Name" not in row.index or pd.isna(row["File_Name"]):
         return None
 
-    file_path = str(row["File_Path"])
+    file_name = str(row["File_Name"]).strip()
 
-    # 1) Direct/absolute path
-    if os.path.exists(file_path):
-        return file_path
+    # 1) Direct path
+    if os.path.exists(file_name):
+        return file_name
 
     # 2) Relative to dataset root
-    full_path = os.path.join(dataset_root, file_path)
+    full_path = os.path.join(dataset_root, file_name)
     if os.path.exists(full_path):
         return full_path
 
-    # 3) Relative to Excel file's folder
+    # 3) In the same folder as the Excel file
     if "_source_folder" in row.index:
-        folder_path = os.path.join(row["_source_folder"], file_path)
+        folder_path = os.path.join(row["_source_folder"], file_name)
         if os.path.exists(folder_path):
             return folder_path
 
-        # 4) Just the filename in Excel's folder
-        just_name = os.path.basename(file_path)
+        just_name = os.path.basename(file_name)
         folder_path2 = os.path.join(row["_source_folder"], just_name)
         if os.path.exists(folder_path2):
             return folder_path2
+
+    # 4) Search all subfolders
+    just_name = os.path.basename(file_name)
+    for root, dirs, files in os.walk(dataset_root):
+        if just_name in files:
+            return os.path.join(root, just_name)
 
     return None
 
 
 def get_gender_label(row):
     """
-    Extract gender label from the 'Gender' column.
+    Extract gender label from normalized 'Gender' column.
     Normalizes to: "Male", "Woman", "Child"
-    (matching the instructor's table: Male / Woman / Child)
     """
     if "Gender" not in row.index or pd.isna(row["Gender"]):
         return "Unknown"
 
-    label = str(row["Gender"]).strip().lower()
+    value = str(row["Gender"]).strip().lower()
 
-    if label in ["male", "erkek", "m", "e"]:
+    if value in ["male", "erkek", "m", "e"]:
         return "Male"
-    elif label in ["female", "woman", "kadın", "kadin", "f", "k", "w"]:
+    elif value in ["female", "woman", "kadın", "kadin", "f", "k", "w"]:
         return "Woman"
-    elif label in ["child", "çocuk", "cocuk", "c", "ç"]:
+    elif value in ["child", "çocuk", "cocuk", "c", "ç"]:
         return "Child"
     else:
-        return str(row["Gender"]).strip()
+        return value.capitalize()
 
 
 # ============================================================================
@@ -613,8 +634,16 @@ def main():
                 else:
                     total = len(master_df)
                     st.write(f"Found **{total}** records in metadata. Processing...")
+
+                    # Debug: show column names and first row
+                    with st.expander("🔍 Debug: Excel structure"):
+                        st.write("**Columns:**", master_df.columns.tolist())
+                        st.write("**First row:**")
+                        st.write(master_df.iloc[0].to_dict())
+
                     progress = st.progress(0, text="Starting...")
                     results = []
+                    skipped = []
 
                     for idx, row in master_df.iterrows():
                         progress.progress((idx + 1) / total, text=f"Processing {idx+1}/{total}...")
@@ -623,6 +652,9 @@ def main():
                         true_label = get_gender_label(row)
 
                         if audio_path is None or not os.path.exists(str(audio_path)):
+                            if len(skipped) < 5:
+                                fn = row.get("File_Name", "N/A")
+                                skipped.append(f"{fn} (source: {row.get('_source_folder', 'N/A')})")
                             continue
 
                         try:
@@ -649,7 +681,12 @@ def main():
                     progress.empty()
 
                     if not results:
-                        st.error("No files processed. Check that File_Path in Excel matches actual .wav locations.")
+                        st.error("No files processed.")
+                        if skipped:
+                            st.warning("**First skipped files (could not find):**")
+                            for s in skipped:
+                                st.write(f"- `{s}`")
+                            st.info("Check that the file names in Excel match actual .wav files in the group folders.")
                     else:
                         rdf = pd.DataFrame(results)
 
