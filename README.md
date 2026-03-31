@@ -1,59 +1,59 @@
 # Speech Gender Classifier
 
-Bu proje, zaman-domeni oto-korelasyon (autocorrelation) yöntemi kullanarak konuşma sinyallerinden temel frekans (F0) çıkarımı yapar ve basit bir kural tabanlı algoritma ile konuşmacının cinsiyet sınıfını (Male / Woman / Child) tahmin eder.
+This project extracts the fundamental frequency (F0) from speech signals using a time-domain autocorrelation method and predicts the speaker's gender class (Male / Woman / Child) with a simple rule-based classifier.
 
-Dosya
-- `speech_gender_classifier.py` — Tek dosyalık Streamlit uygulaması. Ana analiz ve arayüz burada.
+Files
+- `speech_gender_classifier.py` — Single-file Streamlit application containing the analysis code and user interface.
 
-Gereksinimler
-- Python 3.8+ (tercihen 3.9 veya 3.10)
-- Aşağıdaki paketler gereklidir; bir `requirements.txt` dosyası sağlanmıştır.
+Requirements
+- Python 3.8+ (3.9 or 3.10 recommended)
+- The required Python packages are listed in `requirements.txt`.
 
-Kurulum (Windows PowerShell)
+Installation (Windows PowerShell)
 
 ```powershell
 python -m venv .venv; .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-Çalıştırma
+Run
 
-Streamlit arayüzünü çalıştırmak için:
+Start the Streamlit interface with:
 
 ```powershell
 streamlit run speech_gender_classifier.py
 ```
 
-Kullanım Özeti
-- Sağ kenar paneline (sidebar) veri seti klasörünün tam yolunu girin. Bu klasörün içinde `Group_01`, `Group_02`, ... veya benzeri alt klasörler olmalıdır.
-- Kod, varsayılan olarak şu dosya şablonlarını arar (sırasıyla):
+Usage summary
+- Enter the full path to your dataset folder in the sidebar. That folder should contain group subfolders such as `Group_01`, `Group_02`, etc.
+- The code looks for Excel metadata files in this order:
   1. `**/Grup_*.xlsx`
-  2. `**/Group_*.xlsx`
-  3. `**/*.xlsx` (eğer yukarıdakiler yoksa tüm Excel dosyaları)
-- Excel dosyalarındaki kolon isimleri normalize edilir. Önemli kolonlar:
-  - `File_Name` veya benzeri (dosya adı ya da yol)
-  - `Gender` (cinsiyet) — değerler "Male", "Woman" ya da "Child" ya da Türkçe karşılıkları olabilir
-- Uygulama hem tek dosya yükleyerek anlık tahmin yapmaya, hem de Excel metadata tabanlı tüm veri kümesi analizi yapmaya uygundur.
+ 2. `**/Group_*.xlsx`
+ 3. `**/*.xlsx` (if the above patterns are not found)
+- Column names in Excel files are normalized. Important columns include:
+  - `File_Name` (or equivalents) — file name or path to the .wav file
+  - `Gender` — values may be "Male", "Woman", "Child" or their Turkish equivalents
+- The app supports single-file predictions (upload a .wav) and full dataset analysis using Excel metadata.
 
-Excel ve .wav Dosyaları Hakkında Notlar
-- Excel içindeki `File_Name` sütunundaki değerler ya tam yol ya da yalnızca dosya adını içerebilir. Kod aşağıdaki yolları kontrol eder:
-  - Doğrudan belirtilen yol
-  - Dataset root ile birleştirilmiş yol
-  - Excel dosyasının bulunduğu klasör
-  - Tüm alt klasörlerde dosya adı araması
-- Eğer .wav dosyaları bulunamazsa, analiz atlanır ve ilk birkaç atlanan örnek kullanıcıya gösterilir.
+Notes about Excel and .wav files
+- Values in the Excel `File_Name` column can be either full paths or just file names. The code checks these locations in order:
+  - The exact path if specified in the cell
+  - Joined with the dataset root path
+  - The folder where the Excel file is located
+  - A search through all dataset subfolders for a matching file name
+- If the .wav files cannot be found, the corresponding records are skipped and the first few skipped examples are shown to the user.
 
-Sorun Giderme
-- "No metadata Excel files found" hatası alıyorsanız, dataset klasör yolunu doğru girdiğinizden ve Excel dosyalarının isimlerinin `Grup_` veya `Group_` ile başladığından emin olun.
-- Sessiz / çok kısa .wav dosyalar analiz edilemeyebilir.
-- Eğer `openpyxl` veya `librosa` ile ilgili hata alırsanız, paketlerin doğru kurulduğunu kontrol edin.
+Troubleshooting
+- If you see "No metadata Excel files found", confirm the dataset folder path and that Excel files use `Grup_` or `Group_` naming (or include at least one `.xlsx`).
+- Very short or silent .wav files may not be analyzable.
+- If you encounter errors related to `openpyxl` or `librosa`, verify that required packages are installed.
 
-Geliştirme Notları
-- Temel F0 tahmini oto-korelasyon yöntemi ile yapılıyor; karşılaştırma için FFT tabanlı bir yöntem de hesaplanıp raporda gösteriliyor.
-- Kural tabanlı sınıflandırma için eşikler `speech_gender_classifier.py` içinde tanımlıdır (MALE_UPPER, WOMAN_UPPER). Sidebar üzerinden kullanıcı tarafından değiştirilebilir.
+Developer notes
+- Primary F0 estimation is performed using autocorrelation; FFT-based estimation is also computed for comparison and visual reporting.
+- Classification thresholds (MALE_UPPER, WOMAN_UPPER) are defined in `speech_gender_classifier.py` and can be adjusted via the Streamlit sidebar.
 
-Lisans
-- Proje için özel bir lisans belirtilmemiştir. Kendi çalışmanız için uygun lisansı ekleyin.
+License
+- No specific license is included. Add a license appropriate for your use.
 
-İletişim
-- Daha fazla değişiklik veya ilave isterseniz, repository içinde değişiklik yapabilirim.
+Contact
+- If you want further changes or additions, I can update the repository accordingly.
